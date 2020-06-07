@@ -3,7 +3,7 @@ services:
   mongo:
     image: mongo:3.2.11
     volumes:
-      - mongo_data:/data/db
+      - /home/ec2-user/mongo_data:/data/db
     restart: always
     healthcheck:
       test: "exit 0"
@@ -15,7 +15,7 @@ services:
   solr:
     image: openconceptlab/oclsolr:${ENVIRONMENT-production}
     volumes:
-      - solr_data:/opt/solr/server/solr/collection1/data
+      - /home/ec2-user/solr_data:/opt/solr/server/solr/collection1/data
     restart: always
     healthcheck:
       test: "exit 0"

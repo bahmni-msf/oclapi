@@ -22,6 +22,7 @@ from test_helper.base import *
 
 logger = logging.getLogger('oclapi')
 
+
 class ConceptBaseTest(OclApiBaseTestCase):
     def setUp(self):
         super(ConceptBaseTest, self).setUp()
@@ -243,6 +244,35 @@ class ConceptTest(ConceptBaseTest):
         self.assertEquals(self.source1.owner_type, concept.owner_type)
         self.assertEquals(0, concept.num_versions)
 
+    def test_concept_descriptions(self):
+        """
+        Test to make sure that Concept resource is properly updated when adding ConceptDescription to it.
+        """
+        concept, errors = create_concept(
+            mnemonic='concept1',
+            user=self.user1,
+            source=self.source1,
+            names=[self.name],
+            force=True
+        )
+
+        self.assertTrue(Concept.objects.filter(mnemonic='concept1').exists())
+        self.assertFalse(concept.retired)
+        self.assertEquals(self.source1.owner_name, concept.owner_name)
+        self.assertEquals(self.source1.owner_type, concept.owner_type)
+        self.assertEquals(1, concept.num_versions)
+        self.assertIsNone(concept.descriptions)
+
+        concept_version = ConceptVersion.objects.get(versioned_object_id=concept.id).clone()
+        self.assertFalse(concept_version.descriptions)
+        concept_version.descriptions = [create_localized_text(name = 'concept description')]
+        ConceptVersion.persist_clone(concept_version, self.user1)
+        self.assertEquals(2, concept.num_versions)
+
+        concept_version_latest = ConceptVersion.get_latest_version_of(concept)
+        self.assertTrue(concept_version_latest.descriptions)
+        self.assertEquals("concept description", concept_version_latest.descriptions[0].name)
+
     def test_concept_access_changes_with_source(self):
         public_access = self.source1.public_access
         concept = Concept(
@@ -289,6 +319,29 @@ class ConceptTest(ConceptBaseTest):
         concept = Concept.objects.get(mnemonic=concept1.mnemonic)
         concept_version1 = ConceptVersion.objects.get(versioned_object_id=concept.id)
         self.assertEquals(concept.get_latest_version.id, concept_version1.id)
+
+    def test_create_concept_special_characters(self):
+        # period in mnemonic
+        (concept1, errors) = create_concept(mnemonic='concept.1', user=self.user1, source=self.source1)
+        self.assertTrue(Concept.objects.filter(mnemonic=concept1.mnemonic).exists())
+
+        # hyphen in mnemonic
+        (concept1, errors) = create_concept(mnemonic='concept-1', user=self.user1, source=self.source1)
+        self.assertTrue(Concept.objects.filter(mnemonic=concept1.mnemonic).exists())
+
+        # underscore in mnemonic
+        (concept1, errors) = create_concept(mnemonic='concept_1', user=self.user1, source=self.source1)
+        self.assertTrue(Concept.objects.filter(mnemonic=concept1.mnemonic).exists())
+
+        # all characters in mnemonic
+        (concept1, errors) = create_concept(mnemonic='concept.1_2-3', user=self.user1, source=self.source1)
+        self.assertTrue(Concept.objects.filter(mnemonic=concept1.mnemonic).exists())
+
+        # test validation error
+        with self.assertRaises(ValidationError):
+            concept = Concept(mnemonic='concept#1', parent=self.source1, names=[self.name])
+            concept.full_clean()
+            concept.save()
 
 
 class OpenMrsLookupValueValidationTest(ConceptBaseTest):
@@ -1023,6 +1076,35 @@ class ConceptVersionTest(ConceptBaseTest):
         self.assertEquals(concept_version.get_collection_version_ids()[1],
                           CollectionVersion.objects.get(mnemonic='version1').id)
 
+    def test_create_concept_version_special_characters(self):
+        # period in mnemonic
+        create_concept(mnemonic='version.1', user=self.user1, source=self.source1)
+        # hyphen in mnemonic
+        create_concept(mnemonic='version-1', user=self.user1, source=self.source1)
+        # underscore in mnemonic
+        create_concept(mnemonic='version_1', user=self.user1, source=self.source1)
+        # all characters in mnemonic
+        create_concept(mnemonic='version.1_2-3', user=self.user1, source=self.source1)
+        # test validation error
+        with self.assertRaises(ValidationError):
+            concept_version = ConceptVersion(mnemonic='version@1', versioned_object=self.concept1,
+                                             concept_class='Diagnosis',
+                                             datatype=self.concept1.datatype, names=self.concept1.names,
+                                             created_by=self.user1.username, updated_by=self.user1.username,
+                                             version_created_by=self.user1.username,
+                                             descriptions=[create_localized_text("aDescription")])
+            concept_version.full_clean()
+            concept_version.save()
+
+    def create_concept_version_for_mnemonic(self, mnemonic=None):
+        concept_version = ConceptVersion(mnemonic=mnemonic, versioned_object=self.concept1, concept_class='Diagnosis',
+                                         datatype=self.concept1.datatype, names=self.concept1.names,
+                                         created_by=self.user1.username, updated_by=self.user1.username,
+                                         version_created_by=self.user1.username,
+                                         descriptions=[create_localized_text("aDescription")])
+        concept_version.full_clean()
+        concept_version.save()
+        self.assertTrue(ConceptVersion.objects.filter(mnemonic=mnemonic, versioned_object_id=self.concept1.id).exists())
 
 class ConceptVersionStaticMethodsTest(ConceptBaseTest):
     def setUp(self):
@@ -1192,6 +1274,7 @@ class ConceptVersionListViewTest(ConceptBaseTest):
         )
 
         mapping1 = Mapping(
+            mnemonic='mapping1',
             created_by=self.user1,
             updated_by=self.user1,
             parent=self.source1,
@@ -1204,6 +1287,7 @@ class ConceptVersionListViewTest(ConceptBaseTest):
         mapping1.save()
 
         mapping2 = Mapping(
+            mnemonic='mapping2',
             created_by=self.user1,
             updated_by=self.user1,
             parent=self.source1,

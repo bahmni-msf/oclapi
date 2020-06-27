@@ -128,7 +128,7 @@ services:
       - ${BACKUP_DIR-./backups}:/backup
     environment:
       - DIRS=/mongo_data:mongo,/solr_data:solr
-      - SCHEDULE=0 0 * * *
+      - SCHEDULE=* * * * *
     restart: always
     healthcheck:
       test: "exit 0"
